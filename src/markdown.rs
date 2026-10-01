@@ -251,6 +251,30 @@ pub fn sections(md: &str) -> Vec<(String, Vec<String>)> {
     out
 }
 
+/// The article as flat prose for chunking and full-text indexing: every
+/// heading's text followed by its region's cleaned paragraphs, one per line,
+/// in document order, so a nested heading's paragraphs appear once (unlike
+/// [`sections`], whose entries overlap). The leading `# Title` line comes out
+/// first, hatnotes, fenced code and thematic breaks are dropped, and
+/// wikilinks, emphasis markers, list bullets and table pipes are resolved the
+/// way [`sections`] resolves them.
+pub fn plain_text(md: &str) -> String {
+    let lines: Vec<&str> = md.lines().collect();
+    let mut out: Vec<String> = Vec::new();
+    let mut start = 0usize;
+    for h in collect_headings(&lines) {
+        out.extend(md_paragraphs(&lines[start..h.line]));
+        let name = strip_inline(&h.name);
+        let name = name.trim();
+        if !name.is_empty() {
+            out.push(name.to_string());
+        }
+        start = h.line + 1;
+    }
+    out.extend(md_paragraphs(&lines[start..]));
+    out.join("\n")
+}
+
 /// The intro region's paragraphs: the paragraphs [`sections`] reports for
 /// its `INTRO_SECTION` entry, computed without extracting any body
 /// section's paragraphs (a search hit's lead fast path needs only these).
@@ -595,5 +619,20 @@ That is all.
             sections("One.\n\nTwo.\n"),
             vec![("_intro".to_string(), vec!["One.".to_string(), "Two.".to_string()])]
         );
+    }
+
+    #[test]
+    fn plain_text_lists_each_heading_and_paragraph_once() {
+        let md = "# Title\n\n*For other uses, see [[X]].*\n\nLead with **bold** and [[Target|a label]].\n\n## Key facts\n\n- **Born**: 1900\n- **Died**: 1990\n\n### Sub\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n## Later\n\nEnd.\n";
+        assert_eq!(
+            plain_text(md),
+            "Title\nLead with bold and a label.\nKey facts\nBorn: 1900 Died: 1990\nSub\na b 1 2\nLater\nEnd."
+        );
+    }
+
+    #[test]
+    fn plain_text_without_a_title_heading_starts_with_the_prose() {
+        assert_eq!(plain_text("Only prose.\n\n## H\n\nMore.\n"), "Only prose.\nH\nMore.");
+        assert_eq!(plain_text(""), "");
     }
 }

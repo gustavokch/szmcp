@@ -12,8 +12,11 @@ use memmap2::Mmap;
 use std::fs::File;
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+#[cfg(feature = "xapian")]
+use std::sync::Mutex;
+use std::sync::{Arc, OnceLock};
 
+#[cfg(feature = "xapian")]
 use xapian2::Database as XapianDatabase;
 
 use crate::zimcommon::{
@@ -769,6 +772,18 @@ impl Zim {
         Ok(None)
     }
 
+    /// The raw UTF-8 value of the `M/<key>` metadata entry (`Date`,
+    /// `Language`, `Title`, ...), untrimmed; `None` when the archive carries
+    /// no such entry or it has no content.
+    #[allow(dead_code)] // used by embedders (zimconv); the szmcp binary has its own reader
+    pub fn metadata(&self, key: &str) -> io::Result<Option<String>> {
+        let Some(idx) = self.find_entry(b'M', key)? else { return Ok(None) };
+        let entry = self.get_entry(idx)?;
+        let Target::Cluster(cluster, blob) = entry.target else { return Ok(None) };
+        let bytes = self.read_blob(cluster, blob)?;
+        Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
+    }
+
     /// Open the Xapian database stored as the content of directory entry
     /// `idx` in place: the in-file glass database is opened directly at the
     /// blob's file offset, with no temp file and no copy into RAM. Any
@@ -777,6 +792,7 @@ impl Zim {
     /// spans chunk files in a chunked archive, the archive is truncated
     /// before the blob's end, or Xapian rejects the database. Never yields
     /// `Ok(None)` once the entry exists.
+    #[cfg(feature = "xapian")]
     fn open_index_entry(&self, idx: u32, what: &str) -> io::Result<Option<XapianDatabase>> {
         let entry = self.get_entry(idx)?;
         let Target::Cluster(cluster, blob) = entry.target else {
@@ -811,6 +827,7 @@ impl Zim {
 
     /// Open the archive's full-text Xapian index.
     /// Returns `Ok(None)` when the archive carries no full-text index.
+    #[cfg(feature = "xapian")]
     pub fn open_fulltext_xapian(&self) -> io::Result<Option<XapianDatabase>> {
         match self.fulltext_index_entry()? {
             Some(idx) => self.open_index_entry(idx, "full-text"),
@@ -823,6 +840,7 @@ impl Zim {
     /// are the title's lowercased Porter2 stems (unprefixed), whose data is
     /// the article path and whose value slot 0 is the title. Both indexes
     /// share one docid space. `Ok(None)` when the archive carries none.
+    #[cfg(feature = "xapian")]
     pub fn open_title_xapian(&self) -> io::Result<Option<XapianDatabase>> {
         match self.title_index_entry()? {
             Some(idx) => self.open_index_entry(idx, "title"),
@@ -842,6 +860,7 @@ pub struct Article {
 
 /// The Xapian search databases of one archive, opened together: the
 /// full-text index plus, when the archive carries one, the title index.
+#[cfg(feature = "xapian")]
 pub(crate) struct XapianHandles {
     /// The full-text index (`X/fulltext/xapian`); every searchable archive
     /// has one.
@@ -864,12 +883,19 @@ pub struct Archive {
     /// Idle Xapian handle sets. Handles are moved in and out of the pool,
     /// never shared: `XapianDatabase` is `Send` (not `Sync`) because Xapian
     /// does not support concurrent calls on one database object.
+    #[cfg(feature = "xapian")]
     xapian_pool: Mutex<Vec<XapianHandles>>,
 }
 
 impl Archive {
     pub fn new(name: String, zim: Zim) -> Self {
-        Self { name, zim, language: OnceLock::new(), xapian_pool: Mutex::new(Vec::new()) }
+        Self {
+            name,
+            zim,
+            language: OnceLock::new(),
+            #[cfg(feature = "xapian")]
+            xapian_pool: Mutex::new(Vec::new()),
+        }
     }
 
     /// The archive's Language metadata (first code, lowercased - see
@@ -913,7 +939,8 @@ impl Archive {
     /// `Ok(None)` when the archive carries no full-text index. A title
     /// index that fails to open only downgrades to no title band - it never
     /// fails the search.
-    pub fn with_xapian<T, E>(
+    #[cfg(feature = "xapian")]
+    pub(crate) fn with_xapian<T, E>(
         &self,
         f: impl FnOnce(&XapianHandles) -> Result<T, E>,
     ) -> Result<Option<T>, E>

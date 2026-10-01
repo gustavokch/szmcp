@@ -8,24 +8,42 @@ description = "Sultan's ZIM MCP - an MCP server that serves content from ZIM fil
 members = ["xapian2"]
 resolver = "2"
 
+[lib]
+name = "szmcp"
+path = "src/lib.rs"
+test = false
+doctest = false
+
+[[bin]]
+name = "szmcp"
+path = "src/main.rs"
+required-features = ["server", "xapian"]
+
+[features]
+default = ["server", "xapian"]
+# Xapian full-text/title search and the ZIM writer (`convert`).
+xapian = ["dep:xapian2"]
+# The MCP server, the CLI and everything only they use.
+server = ["dep:clap", "dep:rmcp", "dep:tokio", "dep:serde", "dep:serde_json", "dep:thiserror", "dep:schemars", "dep:axum", "dep:base64", "dep:unicode-normalization", "dep:md-5"]
+
 [dependencies]
-clap = { version = "4.4", features = ["derive"] }
-rmcp = { version = "3.4.0", features = ["server", "schemars", "transport-streamable-http-server"] }
-tokio = { version = "1.35", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "2.0"
-schemars = "1.0"
-axum = "0.8"
-xapian2 = { path = "xapian2" }
+clap = { version = "4.4", features = ["derive"] , optional = true }
+rmcp = { version = "3.4.0", features = ["server", "schemars", "transport-streamable-http-server"] , optional = true }
+tokio = { version = "1.35", features = ["full"] , optional = true }
+serde = { version = "1.0", features = ["derive"] , optional = true }
+serde_json = { version = "1.0", optional = true }
+thiserror = { version = "2.0", optional = true }
+schemars = { version = "1.0", optional = true }
+axum = { version = "0.8", optional = true }
+xapian2 = { path = "xapian2" , optional = true }
 memmap2 = "0.9"
 zstd = "0.14"
 xz2 = "0.1"
-base64 = "0.23.1"
-unicode-normalization = "0.1"
+base64 = { version = "0.23.1", optional = true }
+unicode-normalization = { version = "0.1", optional = true }
 html5ever = "0.40.1"
 regex = "1.13.1"
-md-5 = "0.10"
+md-5 = { version = "0.10", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

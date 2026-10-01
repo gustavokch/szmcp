@@ -74,7 +74,7 @@ pub(crate) fn collapse_space_tab(s: &str) -> String {
 }
 
 /// `urllib.parse.unquote` (percent-decode as UTF-8, invalid escapes kept).
-pub(crate) fn percent_decode(s: &str) -> String {
+pub fn percent_decode(s: &str) -> String {
     if !s.contains('%') {
         return s.to_string();
     }

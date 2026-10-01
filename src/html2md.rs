@@ -1440,7 +1440,18 @@ pub fn html_to_md(
     lang: Option<&str>,
     include_categories: bool,
 ) -> String {
-    let mut dom = Dom::parse(html_str);
+    html_to_md_dom(Dom::parse(html_str), title, lang, include_categories)
+}
+
+/// [`html_to_md`] over an already parsed document, which it consumes. A
+/// caller that also needs the raw DOM (anchors, categories) parses once,
+/// reads what it needs, then hands the `Dom` here.
+pub fn html_to_md_dom(
+    mut dom: Dom,
+    title: Option<&str>,
+    lang: Option<&str>,
+    include_categories: bool,
+) -> String {
     let key_facts = key_facts_of(&dom, lang);
     let categories =
         if include_categories { categories_section(dom.root(), lang) } else { String::new() };
