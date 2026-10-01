@@ -1320,11 +1320,19 @@ pub fn convert(
                 .map_err(|e| format!("fulltext index compact: {e}"))?;
             ft_file = Some(&ft_path);
         }
+        // The throwaway glass database is dead weight once its compacted copy
+        // exists. Dropping the handle and removing the directory here, not at
+        // the end of the run, lowers the peak temp-disk need by the glass
+        // databases' whole size (about a third of the peak at Wikipedia scale).
+        drop(ft);
+        let _ = std::fs::remove_dir_all(tmp.join("fulltext.idx.tmp"));
         if ti_docs > 0 {
             ti.compact_to_path(&ti_path)
                 .map_err(|e| format!("title index compact: {e}"))?;
             ti_file = Some(&ti_path);
         }
+        drop(ti);
+        let _ = std::fs::remove_dir_all(tmp.join("title.idx.tmp"));
 
         // ---- finalize (single-threaded): ONE dirent-header walk over the
         // members — emit the dirents in SOURCE order and build the title-
